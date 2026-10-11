@@ -1,233 +1,247 @@
-# Density Estimation, Classification & Ridge Regression
+# Generative Classification Methods from Scratch
 
-A Python/Jupyter implementation of four machine learning exercises: **Parzen-window density estimation**, **nonparametric classification**, **Gaussian maximum-likelihood estimation**, and **Gaussian basis function regression with ridge regularization**.
+**A machine learning coursework project exploring discriminant analysis and Naive Bayes classifiers in Python.**
 
+This repository contains three notebook-based experiments: (1) Gaussian discriminant analysis on PCA-reduced Iris flowers, (2) Gaussian Naive Bayes for numerical features, and (3) multinomial Naive Bayes for baseball-versus-hockey bag-of-words classification. The core parameter estimates, discriminant functions, decision rules, and evaluation functions are implemented with NumPy; scikit-learn is used for the built-in Iris dataset and PCA.
 
-## At a glance
+## Contents
 
-| Exercise | Approach | Main result |
-| --- | --- | --- |
-| Q1 | Piecewise Parzen-window mean, multiple bandwidths | Curves for `h = 1, 0.25, 0.0625`, plus a close-up at `h = 0.0021714724` |
-| Q10 | Gaussian-kernel class scores for three classes | All three test vectors predicted as **ω₂** for both `h = 1.0` and `h = 0.1` |
-| Q11 | Closed-form and numerical Gaussian MLE | Mean ≈ **100.4805**, variance ≈ **216.31847**; optimizer succeeded |
-| Q12 | Gaussian radial basis functions + ridge regression | Lowest observed average error ≈ **0.0134505** at **λ ≈ 0.246597** |
+- [Experiments](#experiments)
+- [Mathematical background](#mathematical-background)
+- [Results](#results)
+- [Getting started](#getting-started)
+- [Dataset files](#dataset-files)
+- [Implementation notes and limitations](#implementation-notes-and-limitations)
 
-## Repository layout
+## Experiments
 
-```text
-.
-├── README.md
-├── code.ipynb
-├── requirements.txt
-└── assets/
-    ├── parzen_bandwidth_comparison.png
-    ├── parzen_small_bandwidth.png
-    ├── ridge_lambda_0_001.png
-    ├── ridge_lambda_0_05.png
-    ├── ridge_lambda_5.png
-    └── ridge_error_vs_lambda.png
-```
+### 1. Gaussian Discriminant Analysis: Iris
 
-> **Dataset note:** The original notebook's Q11 loads `normal.data.txt`, but that file was **not included** with the uploaded notebook. Q11's saved numerical output is reported below, but executing that cell from scratch requires you to put the original `normal.data.txt` alongside the notebook. The remaining exercises generate or define their data inside the notebook.
+The notebook loads the 150-sample, three-class Iris dataset and projects its four measured features onto **two principal components** for visualization. It then:
 
-## Installation and execution
+- Estimates class mean vectors and a **shared (pooled) covariance matrix** for linear discriminant analysis (LDA).
+- Evaluates linear discriminant scores and plots two-class and three-class decision regions.
+- Computes pairwise linear decision boundaries and compares equal priors (`[0.5, 0.5]`) with unequal priors (`[0.1, 0.9]`).
+- Estimates **class-specific covariance matrices** for quadratic discriminant analysis (QDA).
+- Samples 80% of Iris observations with `np.random.seed(54)` and repeats parameter/region analysis.
+- Implements QDA posterior probabilities and a classifier that **rejects** uncertain samples (prediction `-1`).
 
-Use Python 3 with Jupyter installed:
+### 2. Gaussian Naive Bayes: Numerical Features
+
+This experiment reads `guassianBayes.mat`, estimates class frequencies and per-feature Gaussian means and variances, and predicts labels using sums of log likelihoods. It reports overall accuracy and class-specific precision and recall and writes selected metrics to `evaluation.txt`.
+
+### 3. Multinomial Naive Bayes: Sports Text
+
+Precomputed bag-of-words count matrices represent **baseball (label 0)** and **hockey (label 1)** documents. The notebook:
+
+- Estimates per-class word probabilities using maximum likelihood estimation (MLE).
+- Scores documents using word-count-weighted log probabilities.
+- Re-estimates probabilities with **additive smoothing**, called `beta` in the code.
+- Examines classification accuracy over different smoothing values and different numbers of training samples per class.
+
+The notebook creates binary labels using 50 documents per class for each training and test split. Its input CSV files must use the row ordering and dimensions expected by the code.
+
+## Mathematical background
+
+Let $x\in\mathbb{R}^d$ be a feature vector, $k$ a class, $N_k$ its sample count, and $\pi_k=P(y=k)$ its prior probability.
+
+### PCA
+
+The Iris features are transformed into a two-dimensional subspace using the first two principal components:
+
+$$z=W_2^\top(x-\bar{x}),$$
+
+where the columns of $W_2$ are principal directions. `PCA(n_components=2)` performs this step; the notebook does not implement PCA from scratch.
+
+### LDA: shared-covariance Gaussian model
+
+The maximum-likelihood class means and pooled covariance used in the notebook are:
+
+$$\hat\mu_k=\frac{1}{N_k}\sum_{i:y_i=k}x_i,$$
+
+$$\hat\Sigma=\frac{1}{\sum_kN_k}\sum_k\sum_{i:y_i=k}(x_i-\hat\mu_k)(x_i-\hat\mu_k)^\top.$$
+
+Under a shared covariance Gaussian model, the class score (ignoring class-independent constants) is:
+
+$$g_k(x)=x^\top\Sigma^{-1}\mu_k-\frac12\mu_k^\top\Sigma^{-1}\mu_k+\log\pi_k.$$
+
+The predicted class maximizes $g_k(x)$. The boundary between classes $i$ and $j$ is linear:
+
+$$w_{ij}^\top x+w_{0,ij}=0,$$
+
+$$w_{ij}=\Sigma^{-1}(\mu_i-\mu_j),$$
+
+$$w_{0,ij}=-\frac12\left(\mu_i^\top\Sigma^{-1}\mu_i-\mu_j^\top\Sigma^{-1}\mu_j\right)+\log\frac{\pi_i}{\pi_j}.$$
+
+Changing class priors shifts the intercept and hence the decision boundary.
+
+### QDA: class-specific covariance matrices
+
+Instead of one shared covariance matrix, QDA estimates a separate $\Sigma_k$ for each class. Its score is:
+
+$$g_k(x)=-\frac12(x-\mu_k)^\top\Sigma_k^{-1}(x-\mu_k)-\frac12\log|\Sigma_k|+\log\pi_k.$$
+
+The notebook converts these scores to posteriors with a numerically stabilized softmax:
+
+$$P(y=k\mid x)=\frac{e^{g_k(x)}}{\sum_j e^{g_j(x)}}.$$
+
+The rejection rule implemented in the code is:
+
+$$\hat y(x)=\begin{cases}\arg\max_kP(y=k\mid x),&\max_kP(y=k\mid x)\ge 1-\lambda,\\-1,&\text{otherwise}.\end{cases}$$
+
+Here `-1` means the classifier abstains; the notebook plots an example using $\lambda=0.2$.
+
+### Gaussian Naive Bayes
+
+For each class $k$ and feature $j$, the model estimates $\mu_{jk}$ and $\sigma_{jk}^2$ and assumes conditional independence of features given class:
+
+$$P(x\mid y=k)=\prod_{j=1}^d\mathcal{N}(x_j;\mu_{jk},\sigma_{jk}^2).$$
+
+For numerical stability, predictions use log scores:
+
+$$\hat y=\arg\max_k\left[\log\pi_k+\sum_j\left(-\frac12\log(2\pi\sigma_{jk}^2)-\frac{(x_j-\mu_{jk})^2}{2\sigma_{jk}^2}\right)\right].$$
+
+### Multinomial Naive Bayes and additive smoothing
+
+Let $n_{kv}$ be the count of vocabulary term $v$ in documents belonging to class $k$, and let $V$ be vocabulary size. The MLE probability is:
+
+$$\hat\theta_{kv}^{\mathrm{MLE}}=\frac{n_{kv}}{\sum_{u=1}^{V}n_{ku}}.$$
+
+For a bag-of-words document $x=(x_1,\ldots,x_V)$, the implemented comparison score omits the shared multinomial coefficient and (effectively equal) class-prior term:
+
+$$s_k(x)=\sum_{v=1}^{V}x_v\log\theta_{kv}.$$
+
+To reduce zero-probability problems, the implementation also uses additive smoothing:
+
+$$\hat\theta_{kv}=\frac{n_{kv}+\beta}{\sum_{u=1}^{V}n_{ku}+\beta V}.$$
+
+**Terminology note:** the notebook calls this function `train_multinomial_nb_map`. Its formula is standard additive/Lidstone smoothing; it equals a Dirichlet **posterior mean** for concentration $\alpha=\beta$, or a **MAP estimate** for symmetric Dirichlet parameters $\alpha=\beta+1$ (where defined). The parameterization matters when describing it mathematically.
+
+### Evaluation
+
+$$
+\mathrm{Accuracy}=\frac{\sum_{i=1}^{N}\mathbf{1}(\hat y_i=y_i)}{N}
+$$
+
+$$
+\mathrm{Precision}=\frac{TP}{TP+FP},\qquad
+\mathrm{Recall}=\frac{TP}{TP+FN}
+$$
+
+The Gaussian Naive Bayes evaluator returns zero for precision or recall when its denominator is zero.
+
+## Results
+
+These values are transcribed from the **saved outputs in the supplied notebook**; they have **not been independently rerun**, because the external coursework data files were not provided.
+
+| Experiment | Saved result |
+|---|---:|
+| Gaussian Naive Bayes (numerical features) | **83.49% test accuracy** |
+| Gaussian NB: class 1 precision / recall | 95.12% / 97.50% |
+| Gaussian NB: class 5 precision / recall | 87.50% / 77.78% |
+| Sports text NB (unsmoothed MLE) | **86.00% test accuracy** |
+| Sports text NB (smoothing $\beta\approx 0.263$–$0.295$ in the tested sweep) | **89.00% test accuracy** |
+| Sports text NB (50 training examples/class, $\beta=0.1$) | 87.00% test accuracy |
+
+### Gaussian Naive Bayes: per-class metrics
+
+| Metric | Class 1 | Class 5 |
+|---|---:|---:|
+| Precision | **95.12%** | **87.50%** |
+| Recall | **97.50%** | **77.78%** |
+
+These are the two classes for which the notebook explicitly prints precision and recall; they are not macro-averaged metrics.
+
+### Sports text classification: smoothing experiment
+
+| Additive smoothing ($\beta$) | Saved test accuracy |
+|---:|---:|
+| 0 (MLE, no smoothing) | 86% |
+| 0.01 | 87% |
+| 0.1 | 87% |
+| 0.278 | **89%** |
+| 1 | 79% |
+| 2 | 65% |
+| 5 | 55% |
+| 10 | 54% |
+
+![Test accuracy as additive smoothing varies](results/smoothing-accuracy.png)
+
+### Sports text classification: training set size
+
+| Training documents per class | Saved test accuracy |
+|---:|---:|
+| 1 | 46% |
+| 5 | 59% |
+| 10 | 75% |
+| 15 | 60% |
+| 20 | 71% |
+| 25 | 81% |
+| 30 | 81% |
+| 35 | 83% |
+| 40 | 84% |
+| 45 | **88%** |
+| 50 | 87% |
+
+![Test accuracy by number of training documents per class](results/training-size-accuracy.png)
+
+The plots above are extracted from saved notebook outputs, not newly generated or independently verified runs.
+
+The saved experiments suggest that moderate smoothing can improve accuracy in this particular test set. The training-set-size experiment varies from 1 to 50 observations per class; results are not strictly monotonic. These are exploratory results on a fixed split, not a cross-validated generalization estimate.
+
+## Getting started
+
+### Requirements
+
+- Python 3.9+ (suggested; original environment/version not recorded)
+- NumPy, Matplotlib, SciPy, scikit-learn, Jupyter
 
 ```bash
 python -m venv .venv
-# macOS/Linux:
+# macOS / Linux
 source .venv/bin/activate
 # Windows PowerShell: .venv\Scripts\Activate.ps1
-
 pip install -r requirements.txt
-jupyter notebook ML_Assignment_2.ipynb
+jupyter notebook ML_annotated.ipynb
 ```
 
-Run cells from top to bottom. **Question 11 requires `normal.data.txt`** in the working directory. If it is unavailable, skip its cell to run Question 12; the other questions do not depend on it. The notebook includes saved figures and printed outputs for review without rerunning.
+Run notebook cells **in order**. The Iris portion relies on scikit-learn's bundled dataset and does not need an external download. The Gaussian NB and sports-text sections require additional data files, described below.
 
-## Question 1 — Parzen-window density estimation
+## Dataset files
 
-### Method
+Put the following files in the **same directory as the notebook**, preserving their names exactly:
 
-The notebook evaluates a piecewise kernel-smoothed density expression for a target distribution supported on `(0, a)`:
+```text
+ml-github-ready/
+├── ML_annotated.ipynb
+├── README.md
+├── requirements.txt
+├── .gitignore
+├── guassianBayes.mat             # required; not included
+├── baseball_train_set.csv       # required; not included
+├── baseball_test_set.csv        # required; not included
+├── hockey_train_set.csv         # required; not included
+└── hockey_test_set.csv          # required; not included
+```
 
-$$
-\bar p_h(x)=
-\begin{cases}
-0, & x\leq 0,\\
-\frac{1}{a}\left(1-e^{-x/h}\right), & 0<x\leq a,\\
-\frac{1}{a}\left(e^{a/h}-1\right)e^{-x/h}, & x>a.
-\end{cases}
-$$
+The name **`guassianBayes.mat`** is spelled this way in the original code; changing the filename without updating the code will cause an error. MATLAB data is expected to contain `xTrain`, `yTrain`, `xTest`, and `yTest`. The CSVs must contain numeric document-term count matrices with matching vocabulary columns. Neither their provenance nor their redistribution permissions were supplied; only upload them if sharing is permitted.
 
-The implementation uses `a = 1`. It illustrates how bandwidth `h` changes the smoothness and concentration of the estimate. This formula is the **implemented analytical Parzen-window mean**, not a sample-based Parzen estimator.
+## Implementation notes and limitations
 
-### Results
+- **Notebook preservation:** descriptive Markdown headings have been added, and the original executable cell code, saved figures, and saved console outputs have been retained. The notebook has **not been refactored or independently executed**.
+- **Shared global variables:** some symbols such as `X`, `y`, and `theta` are reused. Execute from top to bottom or restart the kernel before rerunning.
+- **Numerical edge cases:** matrix inversions require invertible covariance matrices; zero Gaussian variance can lead to undefined log likelihoods. These cases are not handled in the original implementation.
+- **Plotting details:** the prior comparison routine produces two separate figures rather than true side-by-side subplots; the smoothing sweep includes $\beta=0$ on a logarithmic x-axis, which cannot display zero.
+- **Smoothing and priors:** the text classifier uses class log scores without an explicit class-prior term, consistent with equal class sizes in the constructed splits. `safe_log` adds `1e-12` before logarithms; this is a computational safeguard, distinct from probabilistic additive smoothing.
+- **Evaluation:** some smoothing parameters were compared on the test set itself; reported best values therefore should not be interpreted as untouched holdout estimates. Use a separate validation set for formal model selection.
+- **Dataset availability:** the supplied upload contained only the notebook. Saved non-Iris results are visible, but rerunning those sections requires the missing data files.
 
-Bandwidths `h = 1.0`, `0.25`, and `0.0625` are compared over a broad interval. A second plot zooms into `x ∈ [0, 0.05]` with `h = 0.0021714724`.
+## References
 
-![Parzen estimates for three bandwidths](assets/parzen_bandwidth_comparison.png)
+- [scikit-learn: Iris dataset](https://scikit-learn.org/stable/modules/generated/sklearn.datasets.load_iris.html)
+- [scikit-learn: PCA](https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html)
+- [GitHub: Mathematical expressions in Markdown](https://docs.github.com/en/get-started/writing-on-github/working-with-advanced-formatting/writing-mathematical-expressions)
 
-![Parzen estimate for a very small bandwidth](assets/parzen_small_bandwidth.png)
+---
 
-**Observation:** Smaller bandwidths create a sharper rise near the support boundary and a more concentrated curve. The plots demonstrate bandwidth sensitivity, not an empirical model accuracy comparison.
-
-## Question 10 — Gaussian-kernel classification
-
-### Method
-
-Three labeled classes, `ω₁`, `ω₂`, and `ω₃`, each contain **10 samples in 3 dimensions**. For a query vector $\mathbf x$, the notebook computes a Gaussian-kernel similarity score for each class:
-
-$$
-S_k(\mathbf x;h)=\sum_{\mathbf x_i\in\omega_k}
-\exp\left(-\frac{\|\mathbf x-\mathbf x_i\|_2^2}{2h^2}\right).
-$$
-
-It assigns the class with the largest score:
-
-$$
-\hat k(\mathbf x)=\arg\max_{k\in\{1,2,3\}} S_k(\mathbf x;h).
-$$
-
-Since all three classes have equal numbers of samples, using these unnormalized scores does not change the predicted class compared with normalized Gaussian Parzen density estimates under equal class priors.
-
-### Results
-
-| Test vector $(x_1,x_2,x_3)$ | Prediction at $h=1.0$ | Prediction at $h=0.1$ |
-| --- | --- | --- |
-| (0.50, 1.00, 0.00) | **ω₂** | **ω₂** |
-| (0.31, 1.51, −0.50) | **ω₂** | **ω₂** |
-| (−0.30, 0.44, −0.10) | **ω₂** | **ω₂** |
-
-Class similarity scores printed by the notebook:
-
-| Bandwidth | Test vector | $S_1$ | $S_2$ | $S_3$ |
-| --- | --- | ---: | ---: | ---: |
-| 1.0 | (0.50, 1.00, 0.00) | 1.25919 | **4.71078** | 3.77466 |
-| 1.0 | (0.31, 1.51, −0.50) | 1.53439 | **4.82796** | 2.05040 |
-| 1.0 | (−0.30, 0.44, −0.10) | 1.39908 | **3.78254** | 1.77066 |
-| 0.1 | (0.50, 1.00, 0.00) | 8.77e−22 | **6.77e−7** | 8.00e−19 |
-| 0.1 | (0.31, 1.51, −0.50) | 2.87e−22 | **1.20e−7** | 2.16e−27 |
-| 0.1 | (−0.30, 0.44, −0.10) | 3.64e−14 | **3.78e−6** | 1.06e−41 |
-
-**Observation:** All three predictions remain ω₂ across both bandwidths, although the absolute kernel scores become much smaller at the narrower bandwidth.
-
-## Question 11 — Gaussian maximum-likelihood estimation
-
-### Method
-
-Assume independent scalar observations $x_1,\ldots,x_n$ from $\mathcal N(\mu,\sigma^2)$. The maximum-likelihood estimators are:
-
-$$
-\hat\mu=\frac{1}{n}\sum_{i=1}^n x_i,
-\qquad
-\hat\sigma^2=\frac{1}{n}\sum_{i=1}^n(x_i-\hat\mu)^2.
-$$
-
-The notebook also minimizes the Gaussian negative log-likelihood:
-
-$$
-\operatorname{NLL}(\mu,\sigma^2)
-=\frac{n}{2}\log(2\pi)+\frac{n}{2}\log(\sigma^2)
-+\frac{1}{2\sigma^2}\sum_{i=1}^n(x_i-\mu)^2.
-$$
-
-It optimizes `log(σ²)` rather than `σ²` directly to keep the variance positive, using `scipy.optimize.minimize`.
-
-### Results (saved notebook output)
-
-| Estimator | Mean $\hat\mu$ | Variance $\hat\sigma^2$ |
-| --- | ---: | ---: |
-| Closed form | 100.4805 | 216.31846975 |
-| Numerical optimization | 100.4805 | 216.31846975 |
-
-**Optimizer success:** `True`.
-
-The two methods agree to the displayed precision. **Reproduction limitation:** `normal.data.txt` is missing from this repository package because it was not supplied; these are results preserved from the original notebook output, not newly rerun estimates.
-
-## Question 12 — Gaussian basis function regression and ridge regularization
-
-### Data generation
-
-Synthetic observations are drawn from:
-
-$$
-y_i=f(x_i)+\varepsilon_i,
-\quad f(x)=\operatorname{sinc}(3x),
-\quad x_i\sim U(0,1),
-\quad \varepsilon_i\sim\mathcal N(0,0.01).
-$$
-
-NumPy's convention is $\operatorname{sinc}(t)=\sin(\pi t)/(\pi t)$, with value 1 at $t=0$. Each generated training dataset contains **25 observations**.
-
-### Gaussian basis model
-
-The model uses **21 Gaussian basis functions** with evenly spaced centers $c_j$ on $[0,1]$ and width $\sigma=0.04$:
-
-$$
-\phi_j(x)=\exp\left(-\frac{(x-c_j)^2}{2\sigma^2}\right),
-\qquad
-\hat f(x)=\beta_0+\sum_{j=1}^{21}\beta_j\phi_j(x).
-$$
-
-Let $\Phi$ be the design matrix including a column of ones, and $R=\operatorname{diag}(0,1,\ldots,1)$ so the intercept is not penalized. The estimator is:
-
-$$
-\hat{\boldsymbol\beta}_\lambda
-=(\Phi^\top\Phi+\lambda R)^{-1}\Phi^\top\mathbf y.
-$$
-
-In code, this linear system is solved using `numpy.linalg.solve` (rather than explicitly computing an inverse).
-
-### Fits for three regularization strengths
-
-For each $\lambda\in\{0.001,0.05,5.0\}$, the saved chart compares the true function, one fitted dataset, and the **average fitted coefficients over 100 independently generated datasets**. The initial dataset and experiment have a fixed random seed (`42`).
-
-**λ = 0.001**
-
-![Gaussian basis regression with lambda 0.001](assets/ridge_lambda_0_001.png)
-
-**λ = 0.05**
-
-![Gaussian basis regression with lambda 0.05](assets/ridge_lambda_0_05.png)
-
-**λ = 5.0**
-
-![Gaussian basis regression with lambda 5.0](assets/ridge_lambda_5.png)
-
-These plots illustrate the change in fit as regularization increases; very strong regularization limits model flexibility.
-
-### Average prediction error across regularization strengths
-
-For each regularization parameter, the experiment fits the model on **100 newly sampled datasets** and compares predictions to the true noise-free function at **100 evenly spaced grid points**:
-
-$$
-E(\lambda)=\frac{1}{100}\sum_{r=1}^{100}
-\left[\frac{1}{100}\sum_{j=1}^{100}
-\big(f(z_j)-\hat f_\lambda^{(r)}(z_j)\big)^2\right].
-$$
-
-Regularization candidates follow $\lambda=\exp(t)$, for `t = -5, -4.7, …` in increments of `0.3` up to the final grid point not exceeding `2`. The error experiment uses seed `123`.
-
-![Average prediction error versus ridge regularization strength](assets/ridge_error_vs_lambda.png)
-
-| Metric | Saved result |
-| --- | ---: |
-| **Minimum average prediction error** | **0.013450496142847112** |
-| **Regularization parameter at minimum** | **0.24659696394160596** |
-| Datasets per candidate | 100 |
-| Prediction evaluation grid points | 100 |
-
-This is the **minimum of the tested λ grid**, not a claim of a globally optimal value. The error is against the known true synthetic function, not an external test set.
-
-## Reproducibility notes
-
-- Original notebook computations and saved outputs were preserved; only descriptive notebook headings were added.
-- Fixed random seeds are used in Question 12 (`42` for fit plots, `123` for the error experiment).
-- The figures under `assets/` were extracted from the notebook's **saved plot outputs**, so the README shows the actual recorded results rather than illustrations.
-- Question 11 cannot be rerun until its original input data file is provided.
-
-## Technologies
-
-Python, NumPy, SciPy, Matplotlib, and Jupyter Notebook.
+*Originally developed as a machine learning course project; the repository version adds explanatory navigation and reproducibility notes.*
