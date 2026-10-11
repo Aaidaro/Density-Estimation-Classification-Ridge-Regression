@@ -1,11 +1,7 @@
-# Machine Learning Assignment 2 — Density Estimation, Classification & Ridge Regression
+# Density Estimation, Classification & Ridge Regression
 
 A Python/Jupyter implementation of four machine learning exercises: **Parzen-window density estimation**, **nonparametric classification**, **Gaussian maximum-likelihood estimation**, and **Gaussian basis function regression with ridge regularization**.
 
-The notebook retains the original assignment question numbers (**1, 10, 11, and 12**) and its saved outputs. Descriptive headings have been added to explain each code block without changing the calculations.
-
-**Author:** Fateme Roshani  
-**Project notebook:** [`ML_Assignment_2.ipynb`](ML_Assignment_2.ipynb)
 
 ## At a glance
 
@@ -21,7 +17,7 @@ The notebook retains the original assignment question numbers (**1, 10, 11, and 
 ```text
 .
 ├── README.md
-├── ML_Assignment_2.ipynb
+├── code.ipynb
 ├── requirements.txt
 └── assets/
     ├── parzen_bandwidth_comparison.png
